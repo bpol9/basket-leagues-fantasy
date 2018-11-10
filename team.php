@@ -16,8 +16,8 @@ if ($conn->connect_error) {
 
 $team = $_GET['team'];
 
-$sql = "SELECT TeamID FROM Team WHERE UserID=" . $_SESSION['userID'] . " AND TeamName='" . $team . "'";
-echo $sql . "<br>";
+$sql = "SELECT TeamID,State,RemainingMoney FROM Team WHERE UserID=" . $_SESSION['userID'] . " AND TeamName='" . $team . "'";
+
 $res1 = $conn->query($sql);
 if ($res1->num_rows == 0) {
 	die("Internal Server Error");
@@ -25,6 +25,8 @@ if ($res1->num_rows == 0) {
 
 $row1 = $res1->fetch_assoc();
 $teamId = $row1['TeamID'];
+$state = $row1['State'];
+$_SESSION['TeamID'] = $teamId;
 $sql = "SELECT PlayerID,PurchasePrice FROM TeamPlayer WHERE TeamID=" . $teamId;
 $res1 = $conn->query($sql);
 $pgi = $sgi = $pfi = 0;
@@ -36,35 +38,29 @@ while ($row1 != NULL) {
 	$row2 = $res2->fetch_assoc();
 	switch ($row2['Position']) {
 	case "PG":
-		$_SESSION['pgs'][$pgi] = $row2;
-		$_SESSION['pgs'][$pgi]['PlayerID'] = $playerId;
-		$_SESSION['pgs'][$pgi++]['PurchasePrice'] = $row1['PurchasePrice'];
+		$team_members['pgs'][$pgi] = $row2;
+		$team_members['pgs'][$pgi]['PlayerID'] = $playerId;
+		$team_members['pgs'][$pgi++]['PurchasePrice'] = $row1['PurchasePrice'];
 		break;
 	case "SG":
 	case "SF":
 	case "SG/SF":
-		$_SESSION['sgs'][$sgi] = $row2;
-		$_SESSION['sgs'][$sgi]['PlayerID'] = $playerId;
-		$_SESSION['sgs'][$sgi++]['PurchasePrice'] = $row1['PurchasePrice'];
+		$team_members['sgs'][$sgi] = $row2;
+		$team_members['sgs'][$sgi]['PlayerID'] = $playerId;
+		$team_members['sgs'][$sgi++]['PurchasePrice'] = $row1['PurchasePrice'];
 		break;
 	case "PF":
 	case "C":
 	case "PF/C":
-		$_SESSION['pfs'][$pfi] = $row2;
-		$_SESSION['pfs'][$pfi]['PlayerID'] = $playerId;
-		$_SESSION['pfs'][$pfi++]['PurchasePrice'] = $row1['PurchasePrice'];
+		$team_members['pfs'][$pfi] = $row2;
+		$team_members['pfs'][$pfi]['PlayerID'] = $playerId;
+		$team_members['pfs'][$pfi++]['PurchasePrice'] = $row1['PurchasePrice'];
 		break;
 	}
 	$row1 = $res1->fetch_assoc();
 }
 $conn->close();
-/*
-for ($i=0; $i<2; $i++) {
-	echo $pgs[$i]['PurchasePrice'];
-	echo $sgs[$i]['PurchasePrice'];
-	echo $pfs[$i]['LastName'];
-}
- */
+
 ?>
 
 <html>
@@ -192,6 +188,15 @@ for ($i=0; $i<2; $i++) {
 		text-align:center;
 		display: inline-block;
 	}
+	td a:hover {
+		cursor:pointer;
+	}
+	td a:active {
+		/*background-color: yellow;*/
+		border: 1px dashed grey;
+	}
+	.buy-sell-column {
+	}
 </style>
 </head>
 <body>
@@ -207,16 +212,12 @@ for ($i=0; $i<2; $i++) {
 		<tr>
 		<td width="70px"><b>Ομάδα:</b></td><td width="120px"><input size="10" type="text" name="team" value="Θρύλος"></td>
 		<td width="150px">Σκορ εβδομάδας:</td><td width="90px"><input size="6" type="text" name="week_score" value="200.05"></td>
-		<td><form action="save_restore.php" method="post">
-			<input style="float:right; width:110px" type="submit"  name="save" value="Αποθήκευση">
-		</form></td>
+		<td><a id="save-changes-button" style="float:right" onclick="saveChanges()">Αποθήκευση</a></td>
 		</tr>
 		<tr>
 		<td width="70px">Χρόνος:</td><td width="120px"><input size="10" type="text" name="time" value="01:45:11"></td>
 		<td width="150px">Χρήματα:</td><td width="90px"><input size="6" type="text" name="money" value="90.04"></td>
-		<td><form action="save_restore.php" method="post">
-			<input style="float:right; width:110px" type="submit" name="restore" value="Αναίρεση">
-		</form></td>
+		<td><a id="reset-changes-button" style="float:right;" onclick="resetChanges()">Αναίρεση</a></td>
 		</tr>
 	</table>
 	<table id="teamTable" width="65%">
@@ -234,59 +235,50 @@ for ($i=0; $i<2; $i++) {
 		<td colspan="6" class="pos_row" style="border-right:0px"><font color="white">Point Guards</font></td>
 		</tr>
 
-		<?php for ($i=0; $i<2; $i++) {
-		if (!in_array($i, $_SESSION['removed']['pg'])) { ?>
-		<tr>
-		<td width="15%" style="border-left:0px" class="player_column"><?php echo $_SESSION['pgs'][$i]['LastName'] ?></td>
-		<td width="15%"><?php echo $_SESSION['pgs'][$i]['TeamName'] ?></td>
-		<td class="right" width="12%" style="border-right:0px; padding:2px"><?php echo "<a href=\"remove.php?pos=pg&index=" . urlencode($i) . "&team=" . urlencode($team) . "&playerId=" . urlencode($_SESSION['pgs'][$i]['PlayerID']) . "\">Sell</a>" ?></td>
-		<td class="right" width="12%" style="border-right:0px"><?php echo $_SESSION['pgs'][$i]['PurchasePrice'] ?></td>
-		<td class="right" width="12%"><?php echo $_SESSION['pgs'][$i]['Price'] ?></td>
-		<td class="right" width="14%"><?php echo $_SESSION['pgs'][$i]['LastWeekScore'] ?></td>
+		<?php for ($i=0; $i<2; $i++) { ?>
+		<tr id="<?php echo "pg" . $i ?>">
+		<td id="<?php echo $team_members['pgs'][$i]['PlayerID'] ?>" width="15%" style="border-left:0px" class="player_column"><?php echo $team_members['pgs'][$i]['LastName'] ?></td>
+		<td width="15%"><?php echo $team_members['pgs'][$i]['TeamName'] ?></td>
+		<td class="right" width="12%" style="border-right:0px; padding:2px"><?php echo "<a class=\"buy-sell-column\" href=\"#\" onclick=\"sellPlayer('pg" .$i . "'," . $team_members['pgs'][$i]['PlayerID'] . ")\">Sell</a>" ?></td>
+		<td class="right" width="12%" style="border-right:0px"><?php echo $team_members['pgs'][$i]['PurchasePrice'] ?></td>
+		<td class="right" width="12%"><?php echo $team_members['pgs'][$i]['Price'] ?></td>
+		<td class="right" width="14%"><?php echo $team_members['pgs'][$i]['LastWeekScore'] ?></td>
 		<td class="right" width="15%">Trigger?</td>
 		</tr>
 
-		<?php }
-		else { ?>
-			<tr>
-			<td width="15%" style="border-left:0px; padding-left:30px;" class="player_column">-</td>
-			<td width="15%">-</td>
-			<td class="right" width="12%" style="border-right:0px; padding:2px"><?php echo "<a class=\"button_link\" href=\"#\" onclick=\"displayModal(0,$i)\">Buy</a>"; ?></td>
-			<td class="right" width="12%" style="border-right:0px">-</td>
-			<td class="right" width="12%">-</td>
-			<td class="right" width="14%">-</td>
-			<td class="right" width="15%">-</td>
-			</tr>
-		<?php }
-		} ?>
+		<?php } ?>
 
 
 		<tr>
 		<td colspan="6" class="pos_row" style="border-right:0px"><font color="white">Shooting Guards and Small Forwards</font></td>
 		</tr>
+
 		<?php for ($i=0; $i<4; $i++) { ?>
-		<tr>
-		<td width="15%" style="border-left:0px" class="player_column"><?php echo $_SESSION['sgs'][$i]['LastName'] ?></td>
-		<td width="15%"><?php echo $_SESSION['sgs'][$i]['TeamName'] ?></td>
-		<td class="right" width="12%" style="border-right:0px; padding:2px;"><?php echo "<a href=\"remove.php?pos=sg&index=" . urlencode($i) . "&team=" . urlencode($team) . "&playerId=" . urlencode($_SESSION['sgs'][$i]['PlayerID']) . "\">Sell</a>"; ?></td>
-		<td class="right" width="12%" style="border-right:0px"><?php echo $_SESSION['sgs'][$i]['PurchasePrice'] ?></td>
-		<td class="right" width="12%"><?php echo $_SESSION['sgs'][$i]['Price'] ?></td>
-		<td class="right" width="14%"><?php echo $_SESSION['sgs'][$i]['LastWeekScore'] ?></td>
+		<tr id="<?php echo "sg" . $i ?>">
+		<td id="<?php echo $team_members['sgs'][$i]['PlayerID'] ?>" width="15%" style="border-left:0px" class="player_column"><?php echo $team_members['sgs'][$i]['LastName'] ?></td>
+		<td width="15%"><?php echo $team_members['sgs'][$i]['TeamName'] ?></td>
+		<td class="right" width="12%" style="border-right:0px; padding:2px"><?php echo "<a class=\"buy-sell-column\" href=\"#\" onclick=\"sellPlayer('sg" . $i . "'," . $team_members['sgs'][$i]['PlayerID'] . ")\">Sell</a>" ?></td>
+		<td class="right" width="12%" style="border-right:0px"><?php echo $team_members['sgs'][$i]['PurchasePrice'] ?></td>
+		<td class="right" width="12%"><?php echo $team_members['sgs'][$i]['Price'] ?></td>
+		<td class="right" width="14%"><?php echo $team_members['sgs'][$i]['LastWeekScore'] ?></td>
 		<td class="right" width="15%">Trigger?</td>
 		</tr>
 
 		<?php } ?>
+
+
 		<tr>
 		<td colspan="6" class="pos_row" style="border-right:0px"><font color="white">Power Forwards and Centers</font></td>
 		</tr>
+
 		<?php for ($i=0; $i<4; $i++) { ?>
-		<tr>
-		<td width="15%" style="border-left:0px" class="player_column"><?php echo $_SESSION['pfs'][$i]['LastName'] ?></td>
-		<td width="15%"><?php echo $_SESSION['pfs'][$i]['TeamName'] ?></td>
-		<td class="right" width="12%" style="border-right:0px; padding:2px;"><?php echo "<a href=\"remove.php?pos=pf&index=" . urlencode($i) . "&team=" . urlencode($team) . "&playerId=" . urlencode($_SESSION['pfs'][$i]['PlayerID']) . "\">Sell</a>"; ?></td>
-		<td class="right" width="12%" style="border-right:0px"><?php echo $_SESSION['pfs'][$i]['PurchasePrice'] ?></td>
-		<td class="right" width="12%"><?php echo $_SESSION['pfs'][$i]['Price'] ?></td>
-		<td class="right" width="14%"><?php echo $_SESSION['pfs'][$i]['LastWeekScore'] ?></td>
+		<tr id="<?php echo "pf" . $i ?>">
+		<td id="<?php echo $team_members['pfs'][$i]['PlayerID'] ?>" width="15%" style="border-left:0px" class="player_column"><?php echo $team_members['pfs'][$i]['LastName'] ?></td>
+		<td width="15%"><?php echo $team_members['pfs'][$i]['TeamName'] ?></td>
+		<td class="right" width="12%" style="border-right:0px; padding:2px"><?php echo "<a class=\"buy-sell-column\" href=\"#\" onclick=\"sellPlayer('pf" . $i . "'," . $team_members['pfs'][$i]['PlayerID'] . ")\">Sell</a>" ?></td>
+		<td class="right" width="12%" style="border-right:0px"><?php echo $team_members['pfs'][$i]['PurchasePrice'] ?></td>
+		<td class="right" width="12%"><?php echo $team_members['pfs'][$i]['Price'] ?></td>
+		<td class="right" width="14%"><?php echo $team_members['pfs'][$i]['LastWeekScore'] ?></td>
 		<td class="right" width="15%">Trigger?</td>
 		</tr>
 		<?php } ?>
@@ -295,38 +287,95 @@ for ($i=0; $i<2; $i++) {
 	</table>
 	</div>
 
-	<div id="buyModal" class="modal">
-		<div class="modal-content">
-			<table id="buyModalTable"></table>
-		</div>
+	<div id="modal" class="modal">
+		<div id = "modalContent" class="modal-content"></div>
 	</div>
 	
 </body>
 
 <script>
-var modal = document.getElementById("buyModal");
-var modalTable = document.getElementById("buyModalTable");
+/*TODO remove sold[] and bought[] because the ids are contained also in sold_info[][0] and sold_info[][1] respectively*/
+var empty_row1 = "<tr id=\"";
+var empty_row2 = "\"><td width=\"15%\" style=\"border-left:0px\" class=\"player_column\">-</td><td width=\"15%\">-</td><td class=\"right\" width=\"12%\" style=\"border-right:0px; padding:2px\"><a class=\"button_link\" href=\"#\" onclick=\"displayModal(";
+var empty_row3 = ")\">Buy</a></td><td class=\"right\" width=\"12%\" style=\"border-right:0px\">-</td><td class=\"right\" width=\"12%\">-</td><td class=\"right\" width=\"14%\">-</td><td class=\"right\" width=\"15%\">-</td></tr>";
+
+var modal = document.getElementById("modal");
+var modalContent = document.getElementById("modalContent");
+var MAX_CHANGES = 3;
+var BUTTON_INDEX = 2;
 var cached = [false, false, false];
 var players = ["", "", ""];
+var bi = 0;
+var si = 0;
+var sold_info = create_2D_array(MAX_CHANGES);
+var pos_sold_bought = create_2D_array(MAX_CHANGES); //pos_sold_bought[] = [<pos>,<sold_id>,<bought_id>]
+var pending_id; //row id for which buy button has been pressed.
+var saved; //indicates whether the team has been changed and saved.
 
-function displayModal(pos,index) {
-	if (cached[pos]) {
+<?php if ($state == 's') { ?>
+	saved = true;
+	disableTeamChanges();
+<?php } else { ?>
+	saved = false;
+<?php } ?>
+
+function create_2D_array(rows) {
+	var arr = [];
+	for (var i=0; i<rows; i++) {
+		arr[i] = [];
+	}
+	return arr;
+}
+
+function makePositionTable(list, pos) {
+	var ret = '<table id="modalBuyTable"><tr><th>Παίκτης</th><th>Μέσος Όρος</th><th>Επόμενος Αντίπαλος</th><th>Τιμή</th><th>-</th></tr>';
+	var players = list.split("%");
+	var player;
+	for (var i=0; i<players.length; i++) {
+		player = players[i].split("#");
+		ret += "<tr>";
+		for (var j=0; j<player.length; j++) {
+			if (j == player.length-1) ret += '<td><a href="#" onclick="buyPlayer(' + player[j] + ')">Buy</a></td>';
+			else ret += "<td>" + player[j] + "</td>";
+		}
+		ret += "</tr>";
+	}
+	ret += "</table>";
+	return ret;
+}
+
+function displayModal(pos, player_id) {
+	pending_id = pos;
+	var pos_id;
+	switch (pos.substring(0,2)) {
+	case "pg":
+		pos_id = 0;
+		break;
+	case "sg":
+		pos_id = 1;
+		break;
+	case "pf":
+		pos_id = 2;
+		break;
+	}
+
+	if (cached[pos_id]) {
 		modal.style.display = "block";
-		modalTable.innerHTML = players[pos];
+		modalContent.innerHTML = players[pos_id];
 	}
 	else {
 		modal.style.display = "block";
 		var xhttp = new XMLHttpRequest();
 		xhttp.onreadystatechange = function () {
 			if (this.readyState == 4 && this.status == 200) {
-				console.log(this.responseText);
-				cached[pos] = true;
-				players[pos] = this.responseText;
-				modalTable.innerHTML = players[pos];
+				console.log("player_list.php response for position id " + pos_id + ": " + this.responseText);
+				players[pos_id] = makePositionTable(this.responseText, pos);
+				cached[pos_id] = true;
+				modalContent.innerHTML = players[pos_id];
 
 			}
 		};
-		xhttp.open("GET", "player_list.php?pos=pg", true);
+		xhttp.open("GET", "player_list.php?pos=" + pos_id, true);
 		xhttp.send();
 	}
 }
@@ -336,6 +385,218 @@ window.onclick = function(event) {
 		modal.style.display = "none";
 	}
 }
+
+function sellPlayer(pos, player_id) {
+	var row;
+	var columns;
+	pos_sold_bought[si][0] = pos;
+	pos_sold_bought[si][1] = player_id;
+
+	console.log("[sellPlayer] pos argument: " + pos);
+	row = document.getElementById(pos);
+
+	sold_info[si][0] = pos;
+	sold_info[si][1] = player_id;
+	columns = row.children;
+	for (var j=0; j<columns.length; j++) {
+		sold_info[si][j+2] = columns[j].innerHTML;
+	}
+	++si;
+	if (si == MAX_CHANGES) disableSellButtons();
+
+	row.innerHTML = empty_row1 + pos + empty_row2 + "'" + pos + "'" + "," + player_id + empty_row3;
+	return;
+}
+
+/*
+function update_sold_info(old_id, new_id) {
+	var done = false;
+	var i = 0;
+	while (!done && i < MAX_CHANGES) {
+		if (sold_info[i][0] == old_id) {
+			sold_info[i][1] = new_id;
+			done = true;
+		}
+		else ++i;
+	}
+	if (i == MAX_CHANGES) {
+		console.log("Sold id was not found in sold_info.");
+		//TODO Reset changes + alert
+	}
+}
+*/
+
+function saveBuyId(id, pos) {
+	var done = false;
+	var i = 0;
+	while (!done && (i < MAX_CHANGES)) {
+		if (pos_sold_bought[i][0] == pos) { done = true; pos_sold_bought[i][2] = id; }
+		else ++i;
+	}
+	if (i == MAX_CHANGES) {
+		console.log("[updateBuyId] did not found pos " + pos + " in pos_sold_bought array");
+		resetChanges();
+		alert("Some error occured and changes are lost. Please try again.");
+	}
+}
+
+function buyPlayer(id) {
+	++bi;
+	saveBuyId(id, pending_id);
+
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function () {
+		if (this.readyState == 4 && this.status == 200) {
+			var row = document.getElementById(pending_id);
+			console.log("player_row.php response for player id " + id + ": " + this.responseText);
+			//TODO Update the columns of the row locally.
+			row.innerHTML = this.responseText;
+			row.children[0].id = id;
+			modal.style.display = "none";
+		}
+	};
+	xhttp.open("GET", "player_row.php?playerid=" + id, true);
+	xhttp.send();
+}
+
+function saveChanges() {
+	if (si != bi) { //Put any other locally-detectable error condition here.
+		alert("Some positions are empty!");
+		//resetChanges();
+	}
+	else {
+		modalContent.innerHTML = "<p>Saving your changes...</p>";
+		modal.style.display = "block";
+		
+		var xhttp = new XMLHttpRequest();
+		xhttp.onreadystatechange = function () {
+			if (this.readyState == 4 && this.status == 200) {
+				modal.style.display = "none";
+				if (this.responseText != "OK") {
+					resetChanges();
+					alert("An error occured and changes were not saved!\nPlease try again.");
+				}
+				else { 
+					disableTeamChanges();
+					saved = true;
+				}
+			}
+		};
+		
+		var sold_ids = "";
+		var bought_ids = "";
+		for (var i=1; i<=bi; i++) {
+			sold_ids += (i==1)?("?sid1=" + pos_sold_bought[i-1][1]):("&sid" + i + "=" + pos_sold_bought[i-1][1]);
+			bought_ids += "&bid" + i + "=" + pos_sold_bought[i-1][2];
+		}
+		var ids = sold_ids + bought_ids;
+		console.log("[saveChanges] Ready to send ids list '" + ids + "' to save_changes.php");
+
+		xhttp.open("GET", "save_changes.php" + ids, true);
+		xhttp.send();
+	}
+}
+
+function resetRow(row) {
+	var values = row.split("#");
+	var id = values[0]; //values[0] is the id of the player that was bought. The LastName column has this id.
+	var row = document.getElementById(id).parentElement;
+	var pos = row.id;
+	var columns = row.children;
+
+	for (var i=0; i<columns.length; i++) {
+		if (i == BUTTON_INDEX) {
+			columns[i].innerHTML = "<a class=\"buy-sell-column\" href=\"#\" onclick=\"sellPlayer('" + pos + "'," + values[i+1] + ")\">Sell</a>";
+		}
+		else {
+			columns[i].innerHTML = values[i+1];
+		}
+	}
+}
+
+function localReset() {
+	var row;
+	var columns;
+	for (var i=0; i<si; i++) {
+		for (var j=0; j<9; j++) {
+			console.log(sold_info[i][j] + ":");
+		}
+	}
+
+	for (var i=0; i<si; i++) { //Handles automatically the case where si=0, where no changes have been made anyway.
+		row = document.getElementById(sold_info[i][0]);
+		columns = row.children;
+		columns[0].id = sold_info[i][1];
+		for (j=0; j<columns.length; j++) {
+			columns[j].innerHTML = sold_info[i][j+2];
+		}
+	}
+	si = 0;
+	bi = 0;
+}
+
+
+function resetActions() {
+	saved = false;
+	si = bi = 0;
+	for (var i=0; i<MAX_CHANGES; i++) pos_sold_bought[i][0] = "";
+	enableTeamChanges();
+}
+
+function resetChanges() {
+	if (saved) {
+		modalContent.innerHTML = "<p>Reseting your changes...</p>";
+		modal.style.display = "block";
+
+		var xhttp = new XMLHttpRequest();
+		xhttp.onreadystatechange = function () {
+			if (this.readyState == 4 && this.status == 200) {
+				console.log("reset_team.php response: " + this.responseText);
+				var rows = this.responseText.split("%");
+				for (var i=0; i<rows.length; i++) {
+					resetRow(rows[i]);
+				}
+				resetActions();
+				modal.style.display = "none";
+			}
+		};
+		xhttp.open("GET", "reset_team.php", true);
+		xhttp.send();
+	}
+	else {
+		localReset();
+		resetActions();
+	}
+}
+				 
+
+
+function disableSellButtons() {
+	var button_cols = document.getElementsByClassName("buy-sell-column");
+	for (var i=0; i<button_cols.length; i++) {
+		if (button_cols[i].innerHTML == "Sell") button_cols[i].style.display = "none";
+	}
+}
+
+//TODO Make one parameterized function with "none"/"block" as argument.
+function disableTeamChanges() {
+	var button_cols = document.getElementsByClassName("buy-sell-column");
+	for (var i=0; i<button_cols.length; i++) {
+		button_cols[i].style.display = "none";
+	}
+	document.getElementById("save-changes-button").style.display = "none";
+	//document.getElementById("reset-changes-button").style.display = "none";
+}
+
+function enableTeamChanges() {
+	var button_cols = document.getElementsByClassName("buy-sell-column");
+	for (var i=0; i<button_cols.length; i++) {
+		button_cols[i].style.display = "inline-block";
+	}
+	document.getElementById("save-changes-button").style.display = "block";
+	document.getElementById("reset-changes-button").style.display = "block";
+}
+	
 </script>
 
 </html>
