@@ -16,7 +16,7 @@ if ($conn->connect_error) {
 
 $team = $_GET['team'];
 
-$sql = "SELECT TeamID,State,RemainingMoney FROM Team WHERE UserID=" . $_SESSION['userID'] . " AND TeamName='" . $team . "'";
+$sql = "SELECT TeamID,State,RemainingMoney,Sell_Buy_IDs FROM Team WHERE UserID=" . $_SESSION['userID'] . " AND TeamName='" . $team . "'";
 
 $res1 = $conn->query($sql);
 if ($res1->num_rows == 0) {
@@ -26,13 +26,32 @@ if ($res1->num_rows == 0) {
 $row1 = $res1->fetch_assoc();
 $teamId = $row1['TeamID'];
 $state = $row1['State'];
+$sell_buy_ids = $row1['Sell_Buy_IDs'];
 $_SESSION['TeamID'] = $teamId;
+
+if (!($sell_buy_ids === NULL)) {
+	$check_changes = TRUE;
+	$trans = explode("%", $sell_buy_ids);
+	foreach ($trans as $tr) {
+		$duo = explode("#", $tr);
+		$duos[0][] = $duo[0];
+		$duos[1][] = $duo[1];
+	}	
+	unset($tr);
+}
+else $check_changes = FALSE;
+
 $sql = "SELECT PlayerID,PurchasePrice FROM TeamPlayer WHERE TeamID=" . $teamId;
 $res1 = $conn->query($sql);
 $pgi = $sgi = $pfi = 0;
 $row1 = $res1->fetch_assoc();
 while ($row1 != NULL) {
 	$playerId = $row1['PlayerID'];
+	if ($check_changes) {
+		$key = array_search($playerId, $duos[0]);
+		if (!($key === FALSE)) $playerId = $duos[1][$key];
+	}
+	$player_ids[] = $playerId;
 	$sql = "SELECT FirstName,LastName,Position,Price,TeamName,LastWeekScore FROM Player WHERE PlayerID=" . $playerId;
 	$res2 = $conn->query($sql);
 	$row2 = $res2->fetch_assoc();
@@ -288,7 +307,13 @@ $conn->close();
 	</div>
 
 	<div id="modal" class="modal">
-		<div id = "modalContent" class="modal-content"></div>
+		<div id = "modalContent" class="modal-content">
+			<div id="pg_buy_table" style="display:none"></div>
+			<div id="sg_buy_table" style="display:none"></div>
+			<div id="pf_buy_table" style="display:none"></div>
+			<div id="save_msg" style="display:none"><p>Saving your changes...</p></div>
+			<div id="reset_msg" style="display:none"><p>Reseting your team...</p></div>
+		</div>
 	</div>
 	
 </body>
@@ -303,14 +328,17 @@ var modal = document.getElementById("modal");
 var modalContent = document.getElementById("modalContent");
 var MAX_CHANGES = 3;
 var BUTTON_INDEX = 2;
+var PLAYER_LIST_PRICE_INDEX = 3;
 var cached = [false, false, false];
-var players = ["", "", ""];
+//var players = ["", "", ""];
 var bi = 0;
 var si = 0;
 var sold_info = create_2D_array(MAX_CHANGES);
-var pos_sold_bought = create_2D_array(MAX_CHANGES); //pos_sold_bought[] = [<pos>,<sold_id>,<bought_id>]
+var pos_sold_bought = create_2D_array(MAX_CHANGES); //pos_sold_bought[i] = [<pos>,<sold_id>,<bought_id>]
 var pending_id; //row id for which buy button has been pressed.
 var saved; //indicates whether the team has been changed and saved.
+
+for (var i=0; i<MAX_CHANGES; i++) { pos_sold_bought[i][0] = ""; pos_sold_bought[i][1] = -1; pos_sold_bought[i][2] = -1; }
 
 <?php if ($state == 's') { ?>
 	saved = true;
@@ -318,6 +346,11 @@ var saved; //indicates whether the team has been changed and saved.
 <?php } else { ?>
 	saved = false;
 <?php } ?>
+
+<?php
+$js_array = json_encode($player_ids);
+echo "var player_ids = " . $js_array . ";\n";
+?>
 
 function create_2D_array(rows) {
 	var arr = [];
@@ -327,13 +360,60 @@ function create_2D_array(rows) {
 	return arr;
 }
 
+function quickSort(prices) {
+
+	function swap(i,j) {
+		var tmp1 = prices[0][i];
+		var tmp2 = prices[1][i];
+		prices[0][i] = prices[0][j];
+		prices[1][i] = prices[1][j];
+		prices[0][j] = tmp1;
+		prices[1][j] = tmp2;
+	}
+
+	function partition(left, right) {
+		if (left < right) {
+			var pivot = prices[0][left + Math.floor((right - left) / 2)],
+				left_new = left,
+				right_new = right;
+
+			do {
+				while (prices[0][left_new] > pivot) ++left_new;
+				while (prices[0][right_new] < pivot) --right_new;
+				if (left_new <= right_new) {
+					swap(left_new, right_new);
+					++left_new;
+					--right_new;
+				}
+			} while (left_new <= right_new);
+
+			partition(left, right_new);
+			partition(left_new, right);
+		}
+	}
+
+	partition(0, prices[0].length-1);
+
+	//for (var i=0; i<prices[0].length; i++) console.log("Price: " + prices[0][i] + ", Index: " + prices[1][i]);
+}
+
 function makePositionTable(list, pos) {
-	var ret = '<table id="modalBuyTable"><tr><th>Παίκτης</th><th>Μέσος Όρος</th><th>Επόμενος Αντίπαλος</th><th>Τιμή</th><th>-</th></tr>';
+	var ret = '<table><tr><th>Παίκτης</th><th>Μέσος Όρος</th><th>Επόμενος Αντίπαλος</th><th>Τιμή</th><th>-</th></tr>';
 	var players = list.split("%");
 	var player;
+	var id;
+	var prices = create_2D_array(2);
 	for (var i=0; i<players.length; i++) {
 		player = players[i].split("#");
-		ret += "<tr>";
+		prices[0][i] = player[PLAYER_LIST_PRICE_INDEX];
+		prices[1][i] = i;
+	}
+	quickSort(prices);
+	for (var i=0; i<players.length; i++) {
+		player = players[prices[1][i]].split("#");
+		//player = players[i].split("#");
+		id = player[player.length-1];
+		ret += '<tr id="modal_' + id + (player_ids.includes(id)?'" style="display:none">':'">');
 		for (var j=0; j<player.length; j++) {
 			if (j == player.length-1) ret += '<td><a href="#" onclick="buyPlayer(' + player[j] + ')">Buy</a></td>';
 			else ret += "<td>" + player[j] + "</td>";
@@ -344,10 +424,21 @@ function makePositionTable(list, pos) {
 	return ret;
 }
 
+function display_already_sold(pos) {
+	var elem;
+	for (var i=0; i<si; i++) {
+		if (sold_info[i][0].substring(0,2) == pos) {
+			elem = document.getElementById("modal_"+sold_info[i][1]);
+			if (elem != null) elem.style.display = "";
+		}
+	}
+}
+
 function displayModal(pos, player_id) {
 	pending_id = pos;
 	var pos_id;
-	switch (pos.substring(0,2)) {
+	var p = pos.substring(0,2); //pg, sg or pf
+	switch (p) {
 	case "pg":
 		pos_id = 0;
 		break;
@@ -361,7 +452,7 @@ function displayModal(pos, player_id) {
 
 	if (cached[pos_id]) {
 		modal.style.display = "block";
-		modalContent.innerHTML = players[pos_id];
+		document.getElementById(p+"_buy_table").style.display = "block";
 	}
 	else {
 		modal.style.display = "block";
@@ -369,10 +460,12 @@ function displayModal(pos, player_id) {
 		xhttp.onreadystatechange = function () {
 			if (this.readyState == 4 && this.status == 200) {
 				console.log("player_list.php response for position id " + pos_id + ": " + this.responseText);
-				players[pos_id] = makePositionTable(this.responseText, pos);
+				var table = document.getElementById(p+"_buy_table");
+				table.innerHTML = makePositionTable(this.responseText, pos);
 				cached[pos_id] = true;
-				modalContent.innerHTML = players[pos_id];
-
+				//Display players of this position that have been sold before the table is appeared for the first time.
+				display_already_sold(p);
+				table.style.display = "block";
 			}
 		};
 		xhttp.open("GET", "player_list.php?pos=" + pos_id, true);
@@ -382,6 +475,9 @@ function displayModal(pos, player_id) {
 
 window.onclick = function(event) {
 	if (event.target == modal) {
+		var p = pending_id.substring(0,2);
+		var table = document.getElementById(p+"_buy_table");
+		if (table != null) table.style.display = "none";
 		modal.style.display = "none";
 	}
 }
@@ -389,6 +485,8 @@ window.onclick = function(event) {
 function sellPlayer(pos, player_id) {
 	var row;
 	var columns;
+	var elem;
+
 	pos_sold_bought[si][0] = pos;
 	pos_sold_bought[si][1] = player_id;
 
@@ -401,10 +499,13 @@ function sellPlayer(pos, player_id) {
 	for (var j=0; j<columns.length; j++) {
 		sold_info[si][j+2] = columns[j].innerHTML;
 	}
+
 	++si;
 	if (si == MAX_CHANGES) disableSellButtons();
-
 	row.innerHTML = empty_row1 + pos + empty_row2 + "'" + pos + "'" + "," + player_id + empty_row3;
+	elem = document.getElementById("modal_"+player_id);
+	if (elem != null) elem.style.display = "";
+
 	return;
 }
 
@@ -441,6 +542,7 @@ function saveBuyId(id, pos) {
 }
 
 function buyPlayer(id) {
+	var p = pending_id.substring(0,2);
 	++bi;
 	saveBuyId(id, pending_id);
 
@@ -448,11 +550,14 @@ function buyPlayer(id) {
 	xhttp.onreadystatechange = function () {
 		if (this.readyState == 4 && this.status == 200) {
 			var row = document.getElementById(pending_id);
+			var table = document.getElementById(p+"_buy_table");
 			console.log("player_row.php response for player id " + id + ": " + this.responseText);
 			//TODO Update the columns of the row locally.
 			row.innerHTML = this.responseText;
 			row.children[0].id = id;
+			table.style.display = "none";
 			modal.style.display = "none";
+			document.getElementById("modal_" + id).style.display = "none";
 		}
 	};
 	xhttp.open("GET", "player_row.php?playerid=" + id, true);
@@ -465,13 +570,15 @@ function saveChanges() {
 		//resetChanges();
 	}
 	else {
-		modalContent.innerHTML = "<p>Saving your changes...</p>";
+		//modalContent.innerHTML = "<p>Saving your changes...</p>";
 		modal.style.display = "block";
+		document.getElementById("save_msg").style.display = "block";
 		
 		var xhttp = new XMLHttpRequest();
 		xhttp.onreadystatechange = function () {
 			if (this.readyState == 4 && this.status == 200) {
 				modal.style.display = "none";
+				document.getElementById("save_msg").style.display = "none";
 				if (this.responseText != "OK") {
 					resetChanges();
 					alert("An error occured and changes were not saved!\nPlease try again.");
@@ -503,10 +610,12 @@ function resetRow(row) {
 	var row = document.getElementById(id).parentElement;
 	var pos = row.id;
 	var columns = row.children;
+	var j = player_ids.indexOf(id);
 
 	for (var i=0; i<columns.length; i++) {
 		if (i == BUTTON_INDEX) {
 			columns[i].innerHTML = "<a class=\"buy-sell-column\" href=\"#\" onclick=\"sellPlayer('" + pos + "'," + values[i+1] + ")\">Sell</a>";
+			player_ids[j] = values[i+1]; //restore the sold player's id(who is brought back) to the player_ids array.
 		}
 		else {
 			columns[i].innerHTML = values[i+1];
@@ -539,14 +648,32 @@ function localReset() {
 function resetActions() {
 	saved = false;
 	si = bi = 0;
-	for (var i=0; i<MAX_CHANGES; i++) pos_sold_bought[i][0] = "";
+	for (var i=0; i<MAX_CHANGES; i++) {
+		pos_sold_bought[i][0] = "";
+		pos_sold_bought[i][1] = -1;
+		pos_sold_bought[i][2] = -1;
+	}
 	enableTeamChanges();
 }
 
 function resetChanges() {
+	var elem;
+	for (var i=0; i<si; i++) {
+		if (pos_sold_bought[i][2] != -1) {
+			elem = document.getElementById("modal_" + pos_sold_bought[i][2]);
+			if (elem != null) elem.style.display = "";
+		}
+	}
+	for (var i=0; i<si; i++) {
+		elem = document.getElementById("modal_" + pos_sold_bought[i][1]);
+		if (elem != null) elem.style.display = "none";
+	}
+
+
 	if (saved) {
-		modalContent.innerHTML = "<p>Reseting your changes...</p>";
+		//modalContent.innerHTML = "<p>Reseting your changes...</p>";
 		modal.style.display = "block";
+		document.getElementById("reset_msg").style.display = "block";
 
 		var xhttp = new XMLHttpRequest();
 		xhttp.onreadystatechange = function () {
@@ -558,6 +685,7 @@ function resetChanges() {
 				}
 				resetActions();
 				modal.style.display = "none";
+				document.getElementById("reset_msg").style.display = "none";
 			}
 		};
 		xhttp.open("GET", "reset_team.php", true);
