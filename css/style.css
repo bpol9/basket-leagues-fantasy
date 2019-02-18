@@ -15,34 +15,45 @@
   text-align: center;
   box-shadow: 0 0 20px 0 rgba(0, 0, 0, 0.2), 0 5px 5px 0 rgba(0, 0, 0, 0.24);
   transition: all 0.3 ease;
+  border: 1px solid royalblue;
+  border-radius: .4em;
 }
 .form input {
   font-family: "Roboto", sans-serif;
   outline: 0;
   background: #f2f2f2;
+  color: dimgrey;
   width: 100%;
   border: 0;
   margin: 0 0 15px;
   padding: 15px;
   box-sizing: border-box;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: bold;
 }
 .form input[type=submit] {
   font-family: "Roboto", sans-serif;
-  text-transform: uppercase;
+  /*text-transform: uppercase;*/
   outline: 0;
-  background: #4CAF50;
-  width: 100%;
-  border: 0;
-  padding: 15px;
-  color: #FFFFFF;
-  font-size: 14px;
+  background: lightblue;
+  width: 40%;
+  border: 1px solid lightblue;
+  border-radius: .4em;
+  padding: 5px;
+  color: white;
+  font-size: 13px;
+  font-weight: bold;
   -webkit-transition: all 0.3 ease;
   transition: all 0.3 ease;
   cursor: pointer;
 }
 .form button:hover,.form button:active,.form button:focus {
   background: #43A047;
+}
+.form .warning {
+	margin: 0 0 20px;
+	color: red;
+	font-size: 12px;
 }
 .form .message {
   margin: 15px 0 0;
@@ -91,10 +102,11 @@
 }
 body {
   background: #76b852; /* fallback for old browsers */
-  background: -webkit-linear-gradient(right, #76b852, #8DC26F);
+  /*background: -webkit-linear-gradient(right, #76b852, #8DC26F);
   background: -moz-linear-gradient(right, #76b852, #8DC26F);
   background: -o-linear-gradient(right, #76b852, #8DC26F);
-  background: linear-gradient(to left, #76b852, #8DC26F);
+  background: linear-gradient(to left, #76b852, #8DC26F);*/
+  background-image: url("../images/lightblue-background.jpg");
   font-family: "Roboto", sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;     

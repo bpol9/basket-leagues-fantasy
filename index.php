@@ -11,17 +11,19 @@
 
 <div class="login-page">
   <div class="form">
-    <form class="register-form">
-      <input type="text" placeholder="name" />
-      <input type="password" placeholder="password" />
-      <input type="text" placeholder="email address" />
-      <button>create</button>
+    <form class="register-form" >
+      <p class="warning" id="warning_msg"></p>
+      <input type="text" id="reg_uname" placeholder="Username" name="username" required />
+      <input type="password" id="reg_pass" placeholder="Password" name="password" required />
+      <input type="password" id="reg_conf_pass" placeholder="Confirm password" required />
+      <input type="text" id="reg_email" placeholder="Email address" name="email" required />
+      <input type="submit" value="Register" onclick="onRegisterSubmitted()"/>
       <p class="message">Already registered? <a href="#">Sign In</a></p>
     </form>
     <form class="login-form" action="login.php" method="post">
-      <input type="text" placeholder="username" name="username"/>
-      <input type="password" placeholder="password" name="password"/>
-      <input type="submit" value="login"/>
+      <input type="text" placeholder="username" name="username" required />
+      <input type="password" placeholder="password" name="password" required />
+      <input type="submit" value="Login" />
       <p class="message">Not registered? <a href="#">Create an account</a></p>
     </form>
   </div>
@@ -30,4 +32,4 @@
 <script src="./js/main.js"></script>
 
 </body>
-</head>
+</html>

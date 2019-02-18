@@ -13,36 +13,40 @@ if ($conn->connect_error != NULL) {
 }
 
 
+$sql = "SELECT Host, OnRoad FROM Round";
+$sched = $conn->query($sql);
+$row1 = $sched->fetch_assoc();
+while ($row1 != NULL) {
+	$host = $row1['Host'];
+	$on_road = $row1['OnRoad'];
+	$opponents[$host] = $on_road;
+	$opponents[$on_road] = '@' . $host;
+	$row1 = $sched->fetch_assoc();
+}
+
 if ($pos == 0) {
-	$sql = "SELECT PlayerID, FirstName, LastName, Price FROM Player WHERE Position='PG'";
+	$sql = "SELECT PlayerID, FirstName, LastName, Price, TeamName, MeanScore FROM Player WHERE Position='PG'";
 }
 else if ($pos == 1) {
-	$sql = "SELECT PlayerID, FirstName, LastName, Price FROM Player WHERE Position='SG' OR Position='SF' OR Position='SG/SF'";
+	$sql = "SELECT PlayerID, FirstName, LastName, Price, TeamName, MeanScore FROM Player WHERE Position='SG' OR Position='SF' OR Position='SG/SF'";
 }
 else if ($pos == 2) {
-	$sql = "SELECT PlayerID, FirstName, LastName, Price FROM Player WHERE Position='PF' OR Position='C' OR Position='PF/C'";
+	$sql = "SELECT PlayerID, FirstName, LastName, Price, TeamName, MeanScore FROM Player WHERE Position='PF' OR Position='C' OR Position='PF/C'";
 }
 
 $res = $conn->query($sql);
 $conn->close();
 
-/*
-$output = "<table id=\"modalBuyTable\"><tr><th>Παίκτης</th><th>Μέσος Όρος</th><th>Επόμενος Αντίπαλος</th><th>Τιμή</th><th>-</th></tr>";
-$row = $res->fetch_assoc();
-
-while ($row != NULL) {
-	$output .= "<tr><td>" . $row['LastName'] . "</td><td>-</td><td>-</td><td>" . $row['Price'] . "</td><td><a href=\"#\" onclick=\"buyPlayer(" . $row['PlayerID'] . ")\">Buy</a></tr>";
-	$row = $res->fetch_assoc();
-}
-$output .= "</table>";
-
-echo $output;
- */
-
 $ret_str = "";
 $row = $res->fetch_assoc();
 while ($row != NULL) {
-	$ret_str .= $row['LastName'] . "#" . "-" . "#" . "-" . "#" . $row['Price'] . "#" . $row['PlayerID'] . "%";
+	$ret_str .= $row['LastName'] . " ." . substr($row['FirstName'],0,1) .
+			"#" . $row['TeamName'] .
+			"#" . $opponents[$row['TeamName']] .
+			"#" . $row['MeanScore'] .
+			"#" . $row['Price'] .
+			"#" . $row['PlayerID'] .
+			"%";
 	$row = $res->fetch_assoc();
 }
 
