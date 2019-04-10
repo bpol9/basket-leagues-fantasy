@@ -6,4 +6,4 @@ MariaDB version: 10.1.26
 
 PHP version: 7.0.30
 
-This a fantasy game template for basket leagues. If you need details on how to configure the database and run the site, make a contact at bill.politis93[at]gmail.com
+This a fantasy game for basket leagues, where you can buy/sell players with virtual money and gather score according to their individual performance.
